@@ -47,11 +47,13 @@ class ConditionalCycleGANModel(BaseModel):
     @staticmethod
     def onehot_encode_colors(color_list, emb_shape=(256,256), nb_labels=12):
         assert len(emb_shape) == 2
-        assert np.min(color_list) >= 0 and np.max(color_list) < nb_labels - 1
+        assert color_list.min().item() >= 0 and color_list.max().item() < nb_labels
 
-        encoding = torch.zeros((len(color_list), *emb_shape, nb_labels))
+        encoding = torch.zeros((len(color_list), nb_labels, *emb_shape))
         for idx, color in enumerate(color_list):
-            encoding[idx,:,:,color] = torch.ones(emb_shape)
+            if isinstance(color, torch.Tensor):
+                color = int(color.item())
+            encoding[idx,color,:,:] = torch.ones(emb_shape)
         return encoding
 
 
@@ -75,9 +77,9 @@ class ConditionalCycleGANModel(BaseModel):
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
-            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
+            self.model_names = ['G', 'D']
         else:  # during test time, only load Gs
-            self.model_names = ['G_A', 'G_B']
+            self.model_names = ['G']
 
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
@@ -139,11 +141,13 @@ class ConditionalCycleGANModel(BaseModel):
 
         # concat input image with color to generate
         # TODO check of dim klopt
-        self.fake_B = self.netG(torch.cat([self.real_A, self.color_B], dim=-1))  # G(A)
-        self.rec_A = self.netG(torch.cat([self.fake_B, self.color_A], dim=-1))   # G(G(A))
+        color_B = ConditionalCycleGANModel.onehot_encode_colors(self.color_B).cuda()
+        self.fake_B = self.netG(torch.cat([self.real_A, color_B], dim=1))  # G(A)
+        color_A = ConditionalCycleGANModel.onehot_encode_colors(self.color_A).cuda()
+        self.rec_A = self.netG(torch.cat([self.fake_B, color_A], dim=1))   # G(G(A))
 
-        self.fake_A = self.netG(torch.cat([self.real_B, self.color_A], dim=-1))  # G(A)
-        self.rec_B = self.netG(torch.cat([self.fake_A, self.color_B], dim=-1))   # G(G(B))
+        self.fake_A = self.netG(torch.cat([self.real_B, color_A], dim=1))  # G(A)
+        self.rec_B = self.netG(torch.cat([self.fake_A, color_B], dim=1))   # G(G(B))
 
     def backward_D_basic(self, netD, real, colors_real, fake, colors_fake):
         """Calculate GAN loss for the discriminator
@@ -157,18 +161,18 @@ class ConditionalCycleGANModel(BaseModel):
         We also call loss_D.backward() to calculate the gradients.
         """
         nb_images_real = real.shape[0]
-        img_shape = real.shape[1:2]
+        img_shape = real.shape[2:4]
         assert len(colors_real) == nb_images_real
-        colors_real_encoded = ConditionalCycleGANModel.onehot_encode_colors(colors_real.detach(), emb_shape=img_shape)
-        colors_fake_encoded = ConditionalCycleGANModel.onehot_encode_colors(colors_fake.detach(), emb_shape=img_shape)
+        colors_real_encoded = ConditionalCycleGANModel.onehot_encode_colors(colors_real.detach(), emb_shape=img_shape).cuda()
+        colors_fake_encoded = ConditionalCycleGANModel.onehot_encode_colors(colors_fake.detach(), emb_shape=img_shape).cuda()
 
         # Real
-        d_input_real = torch.cat([real.detach(), colors_real_encoded], dim=-1)
+        d_input_real = torch.cat([real.detach(), colors_real_encoded], dim=1)
         pred_real = netD(d_input_real)
         loss_D_real = self.criterionGAN(pred_real, True)
         
         # Fake image + correct color
-        d_input_fake_img = torch.cat([fake.detach(), colors_fake_encoded], dim=-1)
+        d_input_fake_img = torch.cat([fake.detach(), colors_fake_encoded], dim=1)
         pred_fake_img = netD(d_input_fake_img)
         loss_D_fake_img = self.criterionGAN(pred_fake_img, False)
 
@@ -179,7 +183,9 @@ class ConditionalCycleGANModel(BaseModel):
         colors_incorrect = np.random.randint(0, nb_colors, nb_images_real)
         idxes_same = np.where(colors_incorrect == colors_fake)
         colors_incorrect[idxes_same] = (colors_incorrect[idxes_same] + 1) % nb_colors
-        d_input_fake_label = torch.cat([real.detach(), ConditionalCycleGANModel.onehot_encode_colors(colors_incorrect)], dim=-1)
+        colors_incorrect = ConditionalCycleGANModel.onehot_encode_colors(colors_incorrect).cuda()
+
+        d_input_fake_label = torch.cat([real.detach(), colors_incorrect], dim=1)
         pred_fake_label = netD(d_input_fake_label)
         loss_D_fake_label = self.criterionGAN(pred_fake_label, False)
 
@@ -191,12 +197,12 @@ class ConditionalCycleGANModel(BaseModel):
     def backward_D(self):
         """Calculate GAN loss for discriminator D"""
         # TODO kleur querien?
-        fake_B, (color_B_orig, color_B_new) = self.fake_pool.query((self.fake_B, (self.color_A, self.color_B)))
-        fake_A, (color_A_orig, color_A_new) = self.fake_pool.query((self.fake_A, (self.color_B, self.color_A)))
+        fake_B, (color_B_orig, color_B_new) = self.fake_pool.query(self.fake_B, attributes=torch.Tensor([(self.color_A, self.color_B)]))
+        fake_A, (color_A_orig, color_A_new) = self.fake_pool.query(self.fake_A, attributes=torch.Tensor([(self.color_B, self.color_A)]))
         fake = torch.cat([fake_B, fake_A], dim=0)
-        colors_fake = torch.cat([color_B_new, color_A_new], dim=0)
+        colors_fake = torch.cat([color_B_new.view(1), color_A_new.view(1)])
         real = torch.cat([self.real_A, self.real_B], dim=0)
-        colors_real = torch.cat([self.color_A, self.color_B], dim=0)
+        colors_real = torch.cat([self.color_A.view(1), self.color_B.view(1)], dim=0)
         self.loss_D = self.backward_D_basic(self.netD, real, colors_real, fake, colors_fake)
 
 
@@ -223,10 +229,12 @@ class ConditionalCycleGANModel(BaseModel):
 
         # GAN loss D_A(G_A(A))
         # self.loss_G_A = self.criterionGAN(self.netD(self.fake_B), True)
-        self.loss_G_A = self.criterionGAN(self.netD(torch.cat([self.fake_B, self.color_B], dim=-1)), True)
+        color_B = ConditionalCycleGANModel.onehot_encode_colors(self.color_B).cuda()
+        self.loss_G_A = self.criterionGAN(self.netD(torch.cat([self.fake_B, color_B], dim=1)), True)
         # GAN loss D_B(G_B(B))
         # self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
-        self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, self.color_A], dim=-1)), True)
+        color_A = ConditionalCycleGANModel.onehot_encode_colors(self.color_A).cuda()
+        self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, color_A], dim=1)), True)
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||

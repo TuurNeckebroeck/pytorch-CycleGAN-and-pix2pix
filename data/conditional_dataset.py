@@ -4,7 +4,7 @@ from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import make_dataset
 from PIL import Image
 import random
-import json
+import numpy as np
 
 class ConditionalDataset(BaseDataset):
     """
@@ -55,19 +55,36 @@ class ConditionalDataset(BaseDataset):
             A_paths (str)    -- image paths
             B_paths (str)    -- image paths
         """
-        A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
+        # A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
+        # if self.opt.serial_batches:   # make sure index is within then range
+        #     index_B = index % self.B_size
+        # else:   # randomize the index for domain B to avoid fixed pairs.
+        #     index_B = random.randint(0, self.B_size - 1)
+        # B_path = self.B_paths[index_B]
+        # A_img = Image.open(A_path).convert('RGB')
+        # B_img = Image.open(B_path).convert('RGB')
+        # # apply image transformation
+        # A = self.transform_A(A_img)
+        # B = self.transform_B(B_img)
+
+        # choose 2 random different colors
+        color_set = self.colors_train if self.opt.phase == 'train' else self.colors_test
+        color_A, color_B = np.random.choice(color_set, size=2, replace=False)
+
+        A_path = self.datasets[color_A][index % self.sizes[color_A]]
         if self.opt.serial_batches:   # make sure index is within then range
-            index_B = index % self.B_size
+            index_B = index % self.sizes[color_B]
         else:   # randomize the index for domain B to avoid fixed pairs.
-            index_B = random.randint(0, self.B_size - 1)
-        B_path = self.B_paths[index_B]
+            index_B = random.randint(0, self.sizes[color_B] - 1)
+        B_path = self.datasets[color_B][index_B]
         A_img = Image.open(A_path).convert('RGB')
         B_img = Image.open(B_path).convert('RGB')
+
         # apply image transformation
         A = self.transform_A(A_img)
         B = self.transform_B(B_img)
 
-        return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
+        return {'A': A, 'B': B, 'color_A': self.colormap[color_A], 'color_B': self.colormap[color_B]}
 
     def __len__(self):
         """Return the total number of images in the dataset.
@@ -75,7 +92,9 @@ class ConditionalDataset(BaseDataset):
         As we have two datasets with potentially different number of images,
         we take a maximum of
         """
-        return max(self.A_size, self.B_size)
+        # return max(self.A_size, self.B_size)
+        
+        return max(*self.sizes.values())
 
     # def parse_dataset_file(self, path):
     #     """
@@ -122,12 +141,18 @@ class ConditionalDataset(BaseDataset):
     #                 continue
     #             dataset[self.colormap[img['color']]].append(img['img'])
 
-    def get_colors_list(self):
+    def get_colors_list(self, phases=None):
         colors = []
-        for phase in os.listdir(self.opt.dataroot):
+        for phase in (os.listdir(self.opt.dataroot) if phases == None else phases):
             current_dir = os.path.join(self.opt.dataroot, phase)
             colors += [color for color in os.listdir(current_dir) if os.path.isdir(os.path.join(current_dir, color))]
         return sorted(list(set(colors)))
+
+    def get_train_colors_list(self):
+        return self.get_colors_list(phases=['train'])
+    
+    def get_test_colors_list(self):
+        return self.get_colors_list(phases=['test'])
 
     def list_dataset_imgs(self):
         colors = self.get_colors_list()
@@ -137,6 +162,9 @@ class ConditionalDataset(BaseDataset):
         self.datasets = {color:[] for color in self.colormap.keys()}
         self.sizes = {color:0 for color in self.colormap.keys()}
         
+        self.colors_train = self.get_train_colors_list()
+        self.colors_test = self.get_test_colors_list()
+
         for color in self.colormap.keys():
             if os.path.exists(os.path.join(self.dir, color)):
                 self.datasets[color] = sorted(make_dataset(os.path.join(self.dir,color), self.opt.max_dataset_size))
