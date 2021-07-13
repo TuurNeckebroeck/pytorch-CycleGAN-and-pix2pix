@@ -84,7 +84,7 @@ class ConditionalDataset(BaseDataset):
         A = self.transform_A(A_img)
         B = self.transform_B(B_img)
 
-        return {'A': A, 'B': B, 'color_A': self.colormap[color_A], 'color_B': self.colormap[color_B]}
+        return {'A': A, 'B': B, 'color_A': self.colormap[color_A], 'color_B': self.colormap[color_B], 'A_paths':A_path, 'B_paths':B_path}
 
     def __len__(self):
         """Return the total number of images in the dataset.

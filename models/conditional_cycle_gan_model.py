@@ -129,7 +129,7 @@ class ConditionalCycleGANModel(BaseModel):
         # TODO set input color: self.color_B
 
         # TODO wat hiermee doen?
-        # self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        self.image_paths = input['A_paths']
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
