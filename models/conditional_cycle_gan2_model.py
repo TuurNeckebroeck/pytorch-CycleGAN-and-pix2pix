@@ -96,7 +96,7 @@ class ConditionalCycleGAN2Model(BaseModel):
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
             # self.netD_color = networks.define_D(opt.output_nc + nb_color_channels, opt.ndf, opt.netD,
             #                     opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netD_color = networks.define_D_color()
+            self.netD_color = networks.define_D_color(opt.init_type, opt.init_gain, self.gpu_ids)
             # resnet per definitie 3 inputchannels
 
         if self.isTrain:
