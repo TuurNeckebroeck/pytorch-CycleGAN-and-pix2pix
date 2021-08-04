@@ -203,9 +203,13 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
 
-def define_D_color(init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_D_color(init_type='normal', init_gain=0.02, gpu_ids=[], pretrained=None):
     net = ColorDiscriminator()
-    return init_net(net, init_type, init_gain, gpu_ids)
+    if pretrained is None:
+        net = init_net(net, init_type, init_gain, gpu_ids)
+    else:
+        net.load_pretrained_model(pretrained)
+    return net
 
 
 ##############################################################################
@@ -627,8 +631,8 @@ class ColorDiscriminator(nn.Module):
         # use pretrained network
         # pretrained_weights_path = "/media/tuur/Files/Documents/KU Leuven/2e master/Thesis/eigen-code/color_prediction/adam_resnet152_best_val71.pth.tar"
 
-        # model_ft = models.resnet152(pretrained=True)
-        model_ft = models.resnet18(pretrained=True)
+        model_ft = models.resnet152(pretrained=True)
+        # model_ft = models.resnet18(pretrained=True)
         num_ftrs = model_ft.fc.in_features
         model_ft.fc = nn.Sequential(
             nn.Linear(in_features=num_ftrs, out_features=1024),
@@ -648,6 +652,10 @@ class ColorDiscriminator(nn.Module):
         # ])
 
         self.net = model_ft
+
+    def load_pretrained_model(self, path):
+        self.net.load_state_dict(torch.load(path))
+        self.net.eval()
 
     def forward(self, input):
         return self.net(input)
