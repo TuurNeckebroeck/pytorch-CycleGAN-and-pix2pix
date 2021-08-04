@@ -36,8 +36,7 @@ class ImagePool():
         if self.pool_size == 0:  # if the buffer size is 0, do nothing
             return images
 
-        # TODO problemen met dimensies
-        # if attributes is not None: assert len(images) == len(attributes)
+        # TODO enkel afbeeldingen met dezelfde doelkleur teruggeven voor correct gebruik discriminator
 
         return_images = []
         return_attributes = []

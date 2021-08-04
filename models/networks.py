@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+from torchvision import models, transforms
 
 
 ###############################################################################
@@ -202,6 +203,8 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
 
+def define_D_color():
+    return ColorDiscriminator()
 
 ##############################################################################
 # Classes
@@ -612,4 +615,36 @@ class PixelDiscriminator(nn.Module):
 
     def forward(self, input):
         """Standard forward."""
+        return self.net(input)
+
+class ColorDiscriminator(nn.Module):
+
+    def __init__(self) -> None:
+        super(ColorDiscriminator, self).__init__()
+
+        # use pretrained network
+        # pretrained_weights_path = "/media/tuur/Files/Documents/KU Leuven/2e master/Thesis/eigen-code/color_prediction/adam_resnet152_best_val71.pth.tar"
+
+        model_ft = models.resnet152(pretrained=True)
+        num_ftrs = model_ft.fc.in_features
+        model_ft.fc = nn.Sequential(
+            nn.Linear(in_features=num_ftrs, out_features=1024),
+            nn.Linear(1024,1024),
+            nn.Linear(in_features=1024, out_features=12)
+        )
+
+        # model_ft.load_state_dict(torch.load(pretrained_weights_path))
+        # model_ft.eval()
+
+        # transform = transforms.Compose([
+        #     # ResizeAndPad(512),
+        #     transforms.Resize((224, 224)),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #     std=[0.229, 0.224, 0.225])
+        # ])
+
+        self.net = model_ft
+
+    def forward(self, input):
         return self.net(input)
