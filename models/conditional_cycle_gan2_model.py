@@ -67,7 +67,8 @@ class ConditionalCycleGAN2Model(BaseModel):
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         # self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
-        self.loss_names = ['D_img_A', 'D_color_A', 'D_img_B', 'D_color_B', 'G_A', 'cycle_A', 'idt_A', 'G_B', 'cycle_B', 'idt_B']
+        self.loss_names = ['G_img_A', 'G_color_A', 'G_img_B', 'G_color_B', 'cycle_A', 'idt_A', 'cycle_B', 'idt_B', 'D_img_real', 'D_img_fake', 'D_color_real', 'D_color_fake']
+
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         visual_names_A = ['real_A', 'fake_B', 'rec_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B']
@@ -208,7 +209,7 @@ class ConditionalCycleGAN2Model(BaseModel):
         # return loss_D
         loss_D = loss_D_img_real + loss_D_img_fake + loss_D_color_real + loss_D_color_fake
         loss_D.backward()
-        return loss_D
+        return loss_D, loss_D_img_real, loss_D_img_fake, loss_D_color_real, loss_D_color_fake
 
     def backward_D(self):
         """Calculate GAN loss for discriminator D"""
@@ -219,7 +220,7 @@ class ConditionalCycleGAN2Model(BaseModel):
         colors_fake = torch.cat([color_B_new.view(1), color_A_new.view(1)])
         real = torch.cat([self.real_A, self.real_B], dim=0)
         colors_real = torch.cat([self.color_A.view(1), self.color_B.view(1)], dim=0)
-        self.loss_D = self.backward_D_basic(self.netD_img, self.netD_color, real, colors_real, fake, colors_fake)
+        _, self.loss_D_img_real, self.loss_D_img_fake, self.loss_D_color_real, self.loss_D_color_fake = self.backward_D_basic(self.netD_img, self.netD_color, real, colors_real, fake, colors_fake)
 
 
     def backward_G(self):
@@ -251,22 +252,22 @@ class ConditionalCycleGAN2Model(BaseModel):
         # self.loss_G_A = self.criterionGAN(self.netD(self.fake_B), True)
         # color_B = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_B).cuda()
         colors_B_encoded = torch.nn.functional.one_hot(self.color_B.detach(), num_classes=12).cuda()
-        self.loss_D_img_A = self.criterionGAN(self.netD_img(self.fake_B), True)
-        self.loss_D_color_A = self.criterionColor(self.netD_color(self.fake_B), self.color_B.detach())
+        self.loss_G_img_A = self.criterionGAN(self.netD_img(self.fake_B), True)
+        self.loss_G_color_A = self.criterionColor(self.netD_color(self.fake_B), self.color_B.detach())
 
         # GAN loss D_B(G_B(B))
         # self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
         # color_A = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_A).cuda()
         # self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, color_A], dim=1)), True)
         colors_A_encoded = torch.nn.functional.one_hot(self.color_A.detach(), num_classes=12).cuda()
-        self.loss_D_img_B = self.criterionGAN(self.netD_img(self.fake_A), True)
-        self.loss_D_color_B = self.criterionColor(self.netD_color(self.fake_A), self.color_A.detach())
+        self.loss_G_img_B = self.criterionGAN(self.netD_img(self.fake_A), True)
+        self.loss_G_color_B = self.criterionColor(self.netD_color(self.fake_A), self.color_A.detach())
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
         # combined loss and calculate gradients
-        self.loss_G = self.loss_D_img_A + self.loss_D_color_A + self.loss_D_img_B + self.loss_D_color_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
+        self.loss_G = self.loss_G_img_A + self.loss_G_color_A + self.loss_G_img_B + self.loss_G_color_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
 
     def optimize_parameters(self):
