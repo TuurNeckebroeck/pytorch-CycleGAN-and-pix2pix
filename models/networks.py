@@ -203,8 +203,9 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
 
-def define_D_color():
-    return ColorDiscriminator()
+def define_D_color(init_type='normal', init_gain=0.02, gpu_ids=[]):
+    return init_net(ColorDiscriminator(), init_type, init_gain, gpu_ids)
+
 
 ##############################################################################
 # Classes
