@@ -251,22 +251,22 @@ class ConditionalCycleGAN2Model(BaseModel):
         # self.loss_G_A = self.criterionGAN(self.netD(self.fake_B), True)
         # color_B = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_B).cuda()
         colors_B_encoded = torch.nn.functional.one_hot(self.color_B.detach(), num_classes=12).cuda()
-        self.loss_G_A_img = self.criterionGAN(self.netD_img(self.fake_B), True)
-        self.loss_G_A_color = self.criterionColor(self.netD_color(self.fake_B), self.color_B.detach())
+        self.loss_D_img_A = self.criterionGAN(self.netD_img(self.fake_B), True)
+        self.loss_D_color_A = self.criterionColor(self.netD_color(self.fake_B), self.color_B.detach())
 
         # GAN loss D_B(G_B(B))
         # self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
         # color_A = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_A).cuda()
         # self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, color_A], dim=1)), True)
         colors_A_encoded = torch.nn.functional.one_hot(self.color_A.detach(), num_classes=12).cuda()
-        self.loss_G_B_img = self.criterionGAN(self.netD_img(self.fake_A), True)
-        self.loss_G_B_color = self.criterionColor(self.netD_color(self.fake_A), self.color_A.detach())
+        self.loss_D_img_B = self.criterionGAN(self.netD_img(self.fake_A), True)
+        self.loss_D_color_B = self.criterionColor(self.netD_color(self.fake_A), self.color_A.detach())
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
         # combined loss and calculate gradients
-        self.loss_G = self.loss_G_A_img + self.loss_G_A_color + self.loss_G_B_img + self.loss_G_B_color + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
+        self.loss_G = self.loss_D_img_A + self.loss_D_color_A + self.loss_D_img_B + self.loss_D_color_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
 
     def optimize_parameters(self):
