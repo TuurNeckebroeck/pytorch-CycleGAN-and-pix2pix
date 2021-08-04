@@ -279,7 +279,7 @@ class ConditionalCycleGAN2Model(BaseModel):
         self.backward_G()             # calculate gradients for G_A and G_B
         self.optimizer_G.step()       # update G_A and G_B's weights
         # D_A and D_B
-        self.set_requires_grad([self.netD], True)
+        self.set_requires_grad([self.netD_color, self.netD_img], True)
         self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
         self.backward_D()      # calculate gradients for D_A
         self.optimizer_D.step()  # update D_A and D_B's weights
