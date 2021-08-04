@@ -204,7 +204,8 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
     return init_net(net, init_type, init_gain, gpu_ids)
 
 def define_D_color(init_type='normal', init_gain=0.02, gpu_ids=[]):
-    return init_net(ColorDiscriminator(), init_type, init_gain, gpu_ids)
+    net = ColorDiscriminator()
+    return init_net(net, init_type, init_gain, gpu_ids)
 
 
 ##############################################################################
@@ -626,7 +627,8 @@ class ColorDiscriminator(nn.Module):
         # use pretrained network
         # pretrained_weights_path = "/media/tuur/Files/Documents/KU Leuven/2e master/Thesis/eigen-code/color_prediction/adam_resnet152_best_val71.pth.tar"
 
-        model_ft = models.resnet152(pretrained=True)
+        # model_ft = models.resnet152(pretrained=True)
+        model_ft = models.resnet18(pretrained=True)
         num_ftrs = model_ft.fc.in_features
         model_ft.fc = nn.Sequential(
             nn.Linear(in_features=num_ftrs, out_features=1024),

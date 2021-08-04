@@ -115,7 +115,7 @@ class ConditionalCycleGAN2Model(BaseModel):
             # removed itertools.chain
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             # removed itertools.chain
-            self.optimizer_D = torch.optim.Adam(itertools.chain([self.netD_img.parameters(),self.netD_color.parameters()]), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_img.parameters(),self.netD_color.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
@@ -171,7 +171,7 @@ class ConditionalCycleGAN2Model(BaseModel):
         assert len(colors_real) == nb_images_real
         # colors_real_encoded = ConditionalCycleGAN2Model.onehot_encode_colors(colors_real.detach(), emb_shape=img_shape).cuda()
         # colors_fake_encoded = ConditionalCycleGAN2Model.onehot_encode_colors(colors_fake.detach(), emb_shape=img_shape).cuda()
-        colors_real_encoded = torch.nn.functional.one_hot(colors_real.detach(), nb_classes=nb_colors).cuda()
+        colors_real_encoded = torch.nn.functional.one_hot(colors_real.detach(), num_classes=nb_colors).cuda()
         # colors_fake_encoded = torch.nn.functional.one_hot(colors_fake.detach(), nb_classes=12).cuda() # niet nodig volgens formulering ACGAN
 
         # Real
@@ -185,9 +185,10 @@ class ConditionalCycleGAN2Model(BaseModel):
         loss_D_img_fake = self.criterionGAN(netD_img(fake.detach()), False)
 
         colors_real_predicted = netD_color(real.detach())
-        loss_D_color_real = self.criterionColor(colors_real_predicted, colors_real_encoded.detach())
+        # loss_D_color_real = self.criterionColor(colors_real_predicted, colors_real_encoded.detach())
+        loss_D_color_real = self.criterionColor(colors_real_predicted, colors_real.detach())
         colors_fake_predicted = netD_color(fake.detach())
-        loss_D_color_fake = self.criterionColor(colors_fake_predicted, colors_real_encoded.detach())
+        loss_D_color_fake = self.criterionColor(colors_fake_predicted, colors_real.detach())
 
         # Real image + incorrect color
         # calculate random fake colors
@@ -248,12 +249,18 @@ class ConditionalCycleGAN2Model(BaseModel):
 
         # GAN loss D_A(G_A(A))
         # self.loss_G_A = self.criterionGAN(self.netD(self.fake_B), True)
-        color_B = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_B).cuda()
-        self.loss_G_A = self.criterionGAN(self.netD(torch.cat([self.fake_B, color_B], dim=1)), True)
+        # color_B = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_B).cuda()
+        colors_B_encoded = torch.nn.functional.one_hot(self.color_B.detach(), num_classes=12).cuda()
+        self.loss_G_A_img = self.criterionGAN(self.netD_img(self.fake_B), True)
+        self.loss_G_A_color = self.criterionColor(self.netD_color(self.fake_B), self.color_B.detach())
+
         # GAN loss D_B(G_B(B))
         # self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
-        color_A = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_A).cuda()
-        self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, color_A], dim=1)), True)
+        # color_A = ConditionalCycleGAN2Model.onehot_encode_colors(self.color_A).cuda()
+        # self.loss_G_B = self.criterionGAN(self.netD(torch.cat([self.fake_A, color_A], dim=1)), True)
+        colors_A_encoded = torch.nn.functional.one_hot(self.color_A.detach(), num_classes=12).cuda()
+        self.loss_G_B_img = self.criterionGAN(self.netD_img(self.fake_A), True)
+        self.loss_G_B_color = self.criterionColor(self.netD_color(self.fake_A), self.color_A.detach())
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
@@ -267,7 +274,7 @@ class ConditionalCycleGAN2Model(BaseModel):
         # forward
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
-        self.set_requires_grad([self.netD], False)  # Ds require no gradients when optimizing Gs
+        self.set_requires_grad([self.netD_color, self.netD_img], False)  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
         self.backward_G()             # calculate gradients for G_A and G_B
         self.optimizer_G.step()       # update G_A and G_B's weights
