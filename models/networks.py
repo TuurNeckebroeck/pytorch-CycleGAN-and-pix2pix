@@ -209,6 +209,8 @@ def define_D_color(init_type='normal', init_gain=0.02, gpu_ids=[], pretrained=No
         net = init_net(net, init_type, init_gain, gpu_ids)
     else:
         net.load_pretrained_model(pretrained)
+        if len(gpu_ids) > 0:
+            net = net.cuda()
     return net
 
 
